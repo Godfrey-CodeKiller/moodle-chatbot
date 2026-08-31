@@ -1,0 +1,127 @@
+vv  vv vvvvvvvvvvv<!--
+  Course Chat Widget
+  ------------------
+  Paste this into a Moodle "HTML block" (or a Label with HTML editing)
+  on the course page. Edit API_URL and COURSE_ID below before use.
+
+  This calls your backend's /chat endpoint directly from the browser.
+  Make sure CORS on the backend (app/main.py) is restricted to your
+  Moodle site's origin before going live.
+-->
+<div id="course-chat-widget">
+  <button id="ccw-toggle" aria-label="Open course assistant">💬 Ask a question</button>
+
+  <div id="ccw-panel" hidden>
+    <div id="ccw-header">
+      <span>Course Assistant</span>
+      <button id="ccw-close" aria-label="Close">&times;</button>
+    </div>
+    <div id="ccw-messages"></div>
+    <form id="ccw-form">
+      <input id="ccw-input" type="text" placeholder="Ask about this course..." autocomplete="off" />
+      <button type="submit">Send</button>
+    </form>
+  </div>
+</div>
+
+<style>
+  #course-chat-widget { position: fixed; bottom: 20px; right: 20px; z-index: 9999; font-family: sans-serif; }
+  #ccw-toggle {
+    background: #0f6cbf; color: #fff; border: none; border-radius: 24px;
+    padding: 10px 18px; font-size: 14px; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,.2);
+  }
+  #ccw-panel {
+    position: absolute; bottom: 56px; right: 0; width: 340px; max-height: 480px;
+    background: #fff; border-radius: 10px; box-shadow: 0 4px 20px rgba(0,0,0,.25);
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  #ccw-header {
+    background: #0f6cbf; color: #fff; padding: 10px 12px; font-weight: 600;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  #ccw-close { background: none; border: none; color: #fff; font-size: 18px; cursor: pointer; }
+  #ccw-messages { flex: 1; overflow-y: auto; padding: 10px; font-size: 14px; max-height: 340px; }
+  .ccw-msg { margin-bottom: 10px; line-height: 1.4; }
+  .ccw-msg.user { text-align: right; color: #0f6cbf; }
+  .ccw-msg.bot { text-align: left; color: #222; }
+  .ccw-sources { font-size: 11px; color: #777; margin-top: 4px; }
+  #ccw-form { display: flex; border-top: 1px solid #eee; }
+  #ccw-input { flex: 1; border: none; padding: 10px; font-size: 14px; }
+  #ccw-form button { border: none; background: #0f6cbf; color: #fff; padding: 0 14px; cursor: pointer; }
+</style>
+
+<script>
+(function () {
+  // ---- Configure these two values for your deployment ----
+  const API_URL = "http://127.0.0.1:8000/chat";
+  const COURSE_ID = 8;
+  // ----------------------------------------------------------
+
+  const toggle = document.getElementById("ccw-toggle");
+  const panel = document.getElementById("ccw-panel");
+  const closeBtn = document.getElementById("ccw-close");
+  const form = document.getElementById("ccw-form");
+  const input = document.getElementById("ccw-input");
+  const messages = document.getElementById("ccw-messages");
+
+  let history = [];
+
+  toggle.addEventListener("click", () => { panel.hidden = !panel.hidden; });
+  closeBtn.addEventListener("click", () => { panel.hidden = true; });
+
+  function addMessage(text, role, sources) {
+    const div = document.createElement("div");
+    div.className = "ccw-msg " + (role === "user" ? "user" : "bot");
+    div.textContent = text;
+    messages.appendChild(div);
+
+    if (sources && sources.length) {
+      const srcDiv = document.createElement("div");
+      srcDiv.className = "ccw-sources";
+      srcDiv.textContent = "Sources: " + sources.map(s => s.module_name).join(", ");
+      messages.appendChild(srcDiv);
+    }
+
+    messages.scrollTop = messages.scrollHeight;
+  }
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const question = input.value.trim();
+    if (!question) return;
+
+    addMessage(question, "user");
+    history.push({ role: "user", text: question });
+    input.value = "";
+
+    const thinkingDiv = document.createElement("div");
+    thinkingDiv.className = "ccw-msg bot";
+    thinkingDiv.textContent = "...";
+    messages.appendChild(thinkingDiv);
+    messages.scrollTop = messages.scrollHeight;
+
+    try {
+      const resp = await fetch(API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          course_id: COURSE_ID,
+          question: question,
+          conversation_history: history,
+        }),
+      });
+
+      if (!resp.ok) throw new Error("Request failed: " + resp.status);
+      const data = await resp.json();
+
+      thinkingDiv.remove();
+      addMessage(data.answer, "bot", data.sources);
+      history.push({ role: "model", text: data.answer });
+    } catch (err) {
+      thinkingDiv.remove();
+      addMessage("Sorry, something went wrong. Please try again later.", "bot");
+      console.error(err);
+    }
+  });
+})();
+</script>
