@@ -1,3 +1,8 @@
+from dotenv import load_dotenv
+
+# Load environment variables from .env file immediately
+load_dotenv()
+
 from typing import List, Optional
 
 from fastapi import FastAPI, HTTPException
