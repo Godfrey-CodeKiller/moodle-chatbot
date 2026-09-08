@@ -48,6 +48,12 @@ class ChatResponse(BaseModel):
     answer: str
     sources: List[Source]
 
+@app.get("/")
+def root():
+    return {
+        "status": "online",
+        "message": "Moodle Course Chatbot API is running"
+    }
 
 @app.get("/health")
 def health():
